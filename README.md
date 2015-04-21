@@ -7,6 +7,7 @@ Have you ever had an idea for a program that served no other purpose other than 
 ### Current List of Ideas (In correct order)
 - Best Map (Python)
 - Monty Hall (Python)
+- Fork Bomb (various)
 
 ### License
 Currently under the MIT License (see LICENSE.txt)
