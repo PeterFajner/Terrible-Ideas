@@ -1,0 +1,229 @@
+import random, sys, copy, time, thread
+from msvcrt import getch
+
+HEIGHT = 50
+WIDTH = 50
+SEALEVEL = HEIGHT * 1/2
+
+FPS = 3.0
+
+UP = "\033[F"
+CLEAR = "\033[K"
+
+FALLTHROUGH = [" "] # blocks you can move through
+CHARACTER = "+"
+
+VEL_DAMPING = 0.5
+
+PRESSEDKEY = 0
+
+BIOMES=[
+	#["P", [0, 0, 0, 0, 0]],
+	["M", [-1, 0, 0, 0, 1]],
+	["L", [-2, -1, 0, 1, 2]],
+	["B", [-3, -2, -1, -1, 0, 0, 1, 1, 2, 3]],
+	["H", [-10, -5, 3, 5, 10]]
+	]
+
+def main():
+	board = []  # columns, rows; x, y
+	character_location = []
+	for i in xrange(0, WIDTH):
+		board.append([])
+		for j in xrange(0, HEIGHT):
+			board[i].append("")
+	meta_generate_board(board, 20, 50)
+	generate_minerals(board, 5, 2, ".")
+	generate_minerals(board, 5, 2, "o")
+	print_board(board)
+	piggy = Character(board)
+	thread.start_new_thread(get_input_loop, ())
+	while True:
+		game_loop(board, piggy)
+		time.sleep(1/FPS)
+	
+class Character:
+	position = [0,0]
+	board = []
+	y_vel = 0
+	health = 5
+	def __init__(self, board, position=[0,0], health=5):
+		self.board = board
+		self.position = position
+		self.health = health
+	def fall(self):
+		fall_amount = 0
+		# jump
+		if self.y_vel > 0:
+			fall_amount = -self.y_vel
+			fall_amount = int(fall_amount)
+			self.position[1] += fall_amount
+			self.y_vel -= VEL_DAMPING
+			return
+		# fall
+		if not self.on_ground():
+			self.y_vel -= VEL_DAMPING
+			fall_amount = -self.y_vel
+			# make sure we don't try to go off the screen
+			if self.position[1] + fall_amount > HEIGHT:
+				fall_amount = HEIGHT - self.position[1]
+				self.y_vel = 0
+			fall_amount = int(fall_amount)
+			for i in xrange(0, fall_amount+1):
+				if self.board[self.position[0]][self.position[1] + i] not in FALLTHROUGH:
+					fall_amount = i - 1
+					if self.y_vel < -3: # damage
+						self.health -= 1
+					self.y_vel = 0
+			self.position[1] += fall_amount
+	def on_ground(self):
+		try:
+			if self.board[self.position[0]][self.position[1]+1] in FALLTHROUGH:
+				return False
+		except Exception:	
+			return True
+		return True
+	def update(self):
+		self.fall()
+		return self.position
+	def get_health(self):
+		return self.health
+	def jump(self):
+		if self.on_ground():
+			self.y_vel = 2
+	"""
+	def move(self, amount):
+		try:
+			if self.board[self.position[0] + amount][self.position[1]] in FALLTHROUGH:
+				#print "MOVING"
+				self.position[0] += amount
+			#steph was once here
+		except Exception:
+			pass
+	"""
+	def move(self, amount):
+		try:
+			self.board[self.position[0] + amount][self.position[1]] = " "
+			self.position[0] += amount
+		except Exception:
+			pass
+	def dig(self):
+		self.board[self.position[0]][self.position[1]+1] = " "
+			
+def get_input_loop():
+	# get input
+	while True:
+		global PRESSEDKEY
+		PRESSEDKEY = ord(getch())
+		if PRESSEDKEY == 27:
+			return
+		#print PRESSEDKEY
+		time.sleep(1/(FPS*2))
+		
+		
+def game_loop(board, char):
+	temp_board = copy.deepcopy(board)
+	
+	# get input
+	global PRESSEDKEY
+	key = PRESSEDKEY
+	#print "KEY = "+str(key)
+	if key == 27: # ESC
+		return
+	elif key == 72: # up
+		char.jump()
+		#print "jump"
+	elif key == 77: # right
+		#print "right"
+		char.move(1)
+	elif key == 75: # left
+		#print "left"
+		char.move(-1)
+	elif key == 80: # down
+		char.dig()
+	PRESSEDKEY = 0
+	
+	# show health
+	health = char.get_health()
+	for i in xrange(WIDTH-1-health, WIDTH-1):
+		temp_board[i][0] = "="
+	
+	pos = char.update()
+	temp_board[pos[0]][pos[1]] = CHARACTER
+	print_board(temp_board)
+	
+	
+def meta_generate_board(board, num_biomes, max_biome_width):
+	current_height = SEALEVEL
+	currentX = 0
+	for i in xrange(num_biomes):
+		biome = random.choice(BIOMES)
+		toX = random.randrange(0, max_biome_width) + currentX
+		if toX >= WIDTH or i == num_biomes - 1:
+			toX = WIDTH - 1
+		current_height = generate_board(board, [currentX, toX], current_height, biome)
+		currentX = toX
+		if currentX >= WIDTH:
+			break
+	
+	
+def generate_board(board, brange, current_height, biome):
+	for x in xrange(brange[0], brange[1]):
+		d_height = random.choice(biome[1])
+		if current_height + d_height > 0 and current_height + d_height <= HEIGHT - 3:
+			current_height += d_height
+		for y in xrange(0, current_height):
+			board[x][y] = " "
+		for y in xrange(current_height, HEIGHT):
+			board[x][y] = biome[0]
+	return current_height
+			
+def print_board(board):
+	outp = ""
+	for y in xrange(len(board[0])):
+		for x in xrange(len(board)):
+			outp += board[x][y]
+		outp += "\n"
+	print outp
+	
+def crt_vert_print_board(board):
+	for y in xrange(len(board[0])):
+		for x in xrange(len(board)):
+			print board[x][y],
+		print ""
+		
+def crt_horiz_print_board(board):
+	for i in xrange(len(board[0])):
+		for y in xrange(0, i):
+			for x in xrange(len(board)):
+				print board[x][y],
+			print ""
+		sys.stdout.write(UP)
+		sys.stdout.write(CLEAR)
+	
+		
+def generate_minerals(board, number, range, symbol):
+	for i in xrange(number):
+		x = random.randrange(0, WIDTH)
+		y = HEIGHT - 1
+		sentinel = 100
+		while True:
+			sentinel -= 1
+			y = random.randrange(SEALEVEL, HEIGHT)
+			if board[x][y] != " ":
+				break
+			if sentinel < 0:
+				break
+		board[x][y] = symbol
+		for i in xrange(range * range):
+			xdist = random.randrange(-range, range)
+			ydist = random.randrange(-range, range)
+			try:
+				if board[x+xdist][y+ydist] != " ":
+					board[x+xdist][y+ydist] = symbol
+			except Exception:
+				#print "fuck"
+				pass
+		
+		
+main()
